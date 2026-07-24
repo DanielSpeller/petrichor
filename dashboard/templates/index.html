@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Garden Dashboard — {{ device_id }}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+  <div class="page">
+    <h1>Garden Dashboard — {{ device_id }}</h1>
+
+    <div class="card">
+      <h2>Device Status</h2>
+      <div class="status-row" id="device-status">
+        <span class="status-item">Loading&hellip;</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Moisture Over Time</h2>
+      <div id="moisture-chart-wrap">
+        <canvas id="moisture-chart"></canvas>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Watering Events</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Started</th>
+            <th>Trigger</th>
+            <th>Status</th>
+            <th>Duration</th>
+            <th>Before</th>
+            <th>After</th>
+          </tr>
+        </thead>
+        <tbody id="events-body">
+          <tr><td colspan="6">Loading&hellip;</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+  <script src="{{ url_for('static', filename='js/chart_setup.js') }}"></script>
+</body>
+</html>
