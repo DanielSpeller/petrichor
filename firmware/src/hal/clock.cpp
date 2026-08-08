@@ -47,8 +47,11 @@ void initClockTimezone(const char* tzPosix) {
 }
 
 uint32_t currentUnixTimeSec() {
-    // HARDWARE SWAP POINT: replace with real NTP-synced time.
+#ifdef ARDUINO
+    return static_cast<uint32_t>(time(nullptr));
+#else
     return MOCK_START_UNIX_TIME + (millis() / 1000);
+#endif
 }
 
 int currentLocalHour() {

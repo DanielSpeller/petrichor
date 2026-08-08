@@ -34,3 +34,13 @@ void WateringController::notifyWateringComplete(uint32_t endTimeUnixSec) {
     hasWateredBefore_ = true;
     armed_ = false;
 }
+
+WateringController::State WateringController::getState() const {
+    return State{armed_, hasWateredBefore_, lastWateringEndTime_};
+}
+
+void WateringController::restoreState(const State& state) {
+    armed_ = state.armed;
+    hasWateredBefore_ = state.hasWateredBefore;
+    lastWateringEndTime_ = state.lastWateringEndTime;
+}

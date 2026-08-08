@@ -33,6 +33,14 @@ public:
     // moisture and time.
     void notifyWateringComplete(uint32_t endTimeUnixSec);
 
+    struct State {
+        bool armed;
+        bool hasWateredBefore;
+        uint32_t lastWateringEndTime;
+    };
+    State getState() const;
+    void restoreState(const State& state);
+
 private:
     float thresholdPct_;
     float hysteresisPct_;

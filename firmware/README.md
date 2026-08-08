@@ -4,7 +4,10 @@ ESP32 firmware: moisture sensor + relay-controlled pump, talking MQTT to the Pi.
 
 See `/SPEC.md` before changing any MQTT payload or DB field.
 
-## Remote-prep phase (no hardware yet)
+Copy the cloud values from `include/secrets.h.example` into the gitignored
+`include/cloud_secrets.h`. WiFi and MQTT credentials remain in `include/secrets.h`.
+
+## Standalone deep-sleep cycle
 
 Every real-hardware call is isolated behind one named function, each marked
 `HARDWARE SWAP POINT` in its header comment:
@@ -20,9 +23,9 @@ Every real-hardware call is isolated behind one named function, each marked
 | `currentLocalHour()` | `src/hal/clock.cpp` | POSIX TZ string via `setenv`/`tzset` |
 | Runtime config | `src/config_store.cpp` | ESP32 `Preferences` |
 | OTA updates | `src/ota_handler.cpp` | `ArduinoOTA` |
+| `sendIngestPayload()` | `src/cloud_client.cpp` | HTTPS POST to the deployed Worker |
 
-`sleep_manager.cpp`'s `enterDeepSleep()` is structured per the ESP32 Arduino core's
-documented API but **needs real-device testing** — it's not wired into `main.cpp`'s loop yet.
+`setup()` performs one moisture check, waters if needed, runs a cloud sync when due, and enters deep sleep. RTC memory retains buffered readings, watering events, cooldown state, daily counts, and the sync counter. Cloud and MQTT sync runs every `CHECKS_PER_SYNC` wakes. Deep sleep current, wake timing, RTC drift, and GPIO state retention still need real hardware verification.
 
 ## Build and test
 

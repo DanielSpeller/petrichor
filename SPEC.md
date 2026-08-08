@@ -248,6 +248,24 @@ the moment real values are chosen, and keep firmware config and this file in loc
 
 ---
 
+## 5. Cloud Ingest Endpoint
+
+The standalone ESP32 batches readings, watering events, and device status to the cloud without changing the MQTT contract.
+
+`POST https://<worker-host>/ingest`
+
+Authentication uses `Authorization: Bearer <CLOUD_SHARED_SECRET>`. The body is UTF-8 JSON.
+
+| Field | Type | Notes |
+|---|---|---|
+| `device_id` | string | Same convention as section 3. |
+| `timestamp` | integer | Unix epoch seconds UTC for the batch. |
+| `readings` | array | Objects containing `moisture_pct` and `timestamp`. May be empty. |
+| `watering_events` | array | Objects containing `request_id`, `trigger`, `result`, `requested_duration_sec`, `actual_duration_sec`, `moisture_before_pct`, and `timestamp`. May be empty. |
+| `device_status` | object | Contains `wifi_rssi_dbm`, `battery_voltage_v`, and `uptime_sec`. |
+
+Each reading becomes a `readings` row. Each event becomes a `watering_events` row with `status` copied from `result`. Device status is upserted by `device_id`. A successful request returns `200` with `{"ok":true}`. Invalid JSON or fields return `400`. Missing or invalid authentication returns `401`.
+
 ## Related
 
 - `firmware/` — see its own note before changing any MQTT payload.

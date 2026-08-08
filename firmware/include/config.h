@@ -11,6 +11,12 @@
     #error "Missing firmware/include/secrets.h — copy firmware/include/secrets.h.example and fill in your credentials."
 #endif
 
+#if __has_include("cloud_secrets.h")
+    #include "cloud_secrets.h"
+#else
+    #error "Missing firmware/include/cloud_secrets.h — copy the cloud values from secrets.h.example."
+#endif
+
 // SPEC.md §4 Shared Constants -- placeholder values, not yet tuned against
 // real soil/hardware. Keep in lockstep with SPEC.md when these change.
 constexpr float MOISTURE_THRESHOLD_PCT = 30.0f;
@@ -30,6 +36,10 @@ constexpr int MAX_WATERINGS_PER_DAY = 4;
 // Default UTC means the schedule window is expressed in UTC; change this
 // once the deployment timezone is known.
 constexpr char TIMEZONE_POSIX[] = "UTC0";
+
+constexpr uint32_t CHECK_INTERVAL_SEC = 600;
+constexpr uint32_t CLOUD_SYNC_INTERVAL_SEC = 18000;
+constexpr uint32_t CHECKS_PER_SYNC = CLOUD_SYNC_INTERVAL_SEC / CHECK_INTERVAL_SEC;
 
 // SPEC.md §3 Conventions
 constexpr char DEVICE_ID[] = "zone_1";

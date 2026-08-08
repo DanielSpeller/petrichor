@@ -5,10 +5,9 @@
 Autonomous garden watering: an ESP32 reads soil moisture and drives a relay-controlled
 pump, reporting over MQTT to a Raspberry Pi that logs to SQLite and serves a web dashboard.
 
-**Status: remote-prep.** No hardware exists yet. Both halves are built and tested against
-mocks — the firmware behind a hardware abstraction layer, the dashboard against a
-fake-data generator. When the ESP32 and Pi arrive, the mocks get swapped for real I/O and
-the two sides should meet in the middle. [`SPEC.md`](SPEC.md) is what makes that possible.
+**Status: standalone outdoor prep.** No hardware exists yet. The firmware now runs an
+offline deep sleep watering cycle and buffers cloud updates. Hardware calls remain behind
+swap points and host tests. [`SPEC.md`](SPEC.md) keeps MQTT, cloud, and storage aligned.
 
 ## Architecture
 
@@ -20,6 +19,8 @@ the two sides should meet in the middle. [`SPEC.md`](SPEC.md) is what makes that
  │ watering controller    │  ◀── MQTT ──  │ Flask dashboard  :5000    │
  └────────────────────────┘               └───────────────────────────┘
 ```
+
+The current deployment uses the ESP32 as a standalone battery device. It checks and waters offline on every wake, then sends buffered history to Cloudflare on a slower cadence. The Raspberry Pi and MQTT path remain available for later.
 
 Five topics carry everything: `garden/sensor/moisture`, `garden/pump/command`,
 `garden/pump/status`, `garden/pump/ack`, `garden/device/status`. Three tables store it:

@@ -51,10 +51,25 @@ void test_cooldown_blocks_second_trigger(void) {
                        static_cast<int>(withinCooldown));
 }
 
+void test_state_persists_hysteresis_and_cooldown(void) {
+    WateringController controller(30.0f, 5.0f, 900);
+    controller.evaluate(20.0f, 1000);
+    controller.notifyWateringComplete(1000);
+
+    WateringController restored(30.0f, 5.0f, 900);
+    restored.restoreState(controller.getState());
+    TEST_ASSERT_EQUAL(static_cast<int>(WaterDecision::NO_WATER_HYSTERESIS_LOCKOUT),
+                      static_cast<int>(restored.evaluate(29.0f, 1001)));
+    restored.evaluate(40.0f, 1010);
+    TEST_ASSERT_EQUAL(static_cast<int>(WaterDecision::NO_WATER_COOLDOWN),
+                      static_cast<int>(restored.evaluate(20.0f, 1200)));
+}
+
 int main(int argc, char** argv) {
     UNITY_BEGIN();
     RUN_TEST(test_dry_soil_triggers_watering);
     RUN_TEST(test_hysteresis_prevents_flapping_near_threshold);
     RUN_TEST(test_cooldown_blocks_second_trigger);
+    RUN_TEST(test_state_persists_hysteresis_and_cooldown);
     return UNITY_END();
 }

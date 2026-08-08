@@ -7,3 +7,4 @@ __pycache__/
 .pio/
 .pytest_cache/
 firmware/include/secrets.h
+firmware/include/cloud_secrets.h
