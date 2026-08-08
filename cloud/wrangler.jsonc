@@ -1,0 +1,13 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "petrichor-ingest",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-07",
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "petrichor",
+      "database_id": "6a2b2d6f-3a70-4b3f-bacd-bbd5bf69e282"
+    }
+  ]
+}

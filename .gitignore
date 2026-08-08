@@ -8,3 +8,7 @@ __pycache__/
 .pytest_cache/
 firmware/include/secrets.h
 firmware/include/cloud_secrets.h
+cloud/node_modules/
+cloud/.wrangler/
+cloud/.dev.vars
+cloud/.wrangler-dev.*.log

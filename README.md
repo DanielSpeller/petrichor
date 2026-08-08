@@ -57,6 +57,7 @@ changed without reflashing, with the compile-time values used as defaults.
 | `firmware/` | PlatformIO / Arduino ESP32 firmware. Hardware calls isolated behind a HAL; decision logic is pure C++ and unit-tested on the host. |
 | `dashboard/` | Flask app, read-only SQLite data-access layer, Chart.js frontend. |
 | `data/` | SQLite schema and the fake-data generator used in place of live MQTT. |
+| `cloud/` | Cloudflare Worker and D1 service for standalone ingestion and the public status page. |
 | `docs/` | Design specs and implementation plans. |
 
 ## Quickstart
