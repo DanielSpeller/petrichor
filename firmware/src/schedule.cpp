@@ -2,6 +2,10 @@
 
 Schedule::Schedule(const ScheduleConfig& config) : config_(config) {}
 
+void Schedule::configure(const ScheduleConfig& config) {
+    config_ = config;
+}
+
 bool Schedule::isWithinWindow(int localHour) const {
     return localHour >= config_.windowStartHour && localHour < config_.windowEndHour;
 }

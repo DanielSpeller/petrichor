@@ -1,5 +1,7 @@
 #include <Arduino.h>
 #include <WiFi.h>
+#include <WiFiClientSecure.h>
+#include <ArduinoJson.h>
 
 #include "config.h"
 #include "hal/moisture_sensor.h"
@@ -11,14 +13,40 @@
 #include "mqtt_client.h"
 #include "device_status.h"
 #include "watchdog.h"
+#include "pump_runner.h"
+#include "request_id_history.h"
+#include "config_store.h"
+#include "ota_handler.h"
 
 namespace {
 WifiManager g_wifiManager(1000, 30000);
-WiFiClient g_networkClient;
-// Local Mosquitto broker address -- update to match your laptop's IP/hostname.
-MqttClient g_mqtt(g_networkClient, "192.168.1.100", 1883);
-WateringController g_wateringController(MOISTURE_THRESHOLD_PCT, MOISTURE_HYSTERESIS_PCT, COOLDOWN_PERIOD_SEC);
-Schedule g_schedule(ScheduleConfig{SCHEDULE_WINDOW_START_HOUR, SCHEDULE_WINDOW_END_HOUR, MAX_WATERINGS_PER_DAY});
+
+Client& networkClient() {
+    if (MQTT_USE_TLS) {
+        static WiFiClientSecure instance;
+        if (MQTT_BROKER_CA_CERT[0] != '\0') {
+            instance.setCACert(MQTT_BROKER_CA_CERT);
+        } else {
+            instance.setInsecure();
+        }
+        return instance;
+    }
+    static WiFiClient instance;
+    return instance;
+}
+
+MqttClient g_mqtt(networkClient(), MQTT_BROKER_HOST, MQTT_BROKER_PORT);
+ConfigStore g_configStore;
+WateringController g_wateringController(
+    g_configStore.moistureThresholdPct(),
+    g_configStore.moistureHysteresisPct(),
+    g_configStore.cooldownPeriodSec());
+Schedule g_schedule(ScheduleConfig{
+    g_configStore.scheduleWindowStartHour(),
+    g_configStore.scheduleWindowEndHour(),
+    g_configStore.maxWateringsPerDay()});
+PumpRunner g_pumpRunner;
+RequestIdHistory g_commandRequestIdHistory;
 
 int g_wateringsToday = 0;
 int g_lastCountedDay = -1;
@@ -29,15 +57,122 @@ constexpr uint32_t HEARTBEAT_INTERVAL_MS = 60000;
 uint32_t g_lastMoistureReadMs = 0;
 constexpr uint32_t MOISTURE_READ_INTERVAL_MS = 10000;
 
+uint32_t g_nextLocalRequestId = 1;
+
+// Buffer for a pump/status message that could not be published immediately
+// (e.g. broker disconnected mid-run). Retried each loop once reconnected.
+bool g_pendingPumpStatus = false;
+PumpRunner::Result g_pendingPumpStatusResult;
+char g_pendingPumpStatusResultStr[16] = {};
+
+void makeLocalRequestId(char* buffer, size_t size) {
+    snprintf(buffer, size, "local_%lu", static_cast<unsigned long>(g_nextLocalRequestId++));
+}
+
+float clampMoisture(float value) {
+    if (value < 0.0f) return 0.0f;
+    if (value > 100.0f) return 100.0f;
+    return value;
+}
+
+bool publishPumpStatusFromResult(const PumpRunner::Result& result, const char* resultStr) {
+    if (!g_mqtt.isConnected()) {
+        return false;
+    }
+    return g_mqtt.publishPumpStatus(result.requestId, result.trigger, resultStr,
+                                    result.requestedDurationSec, result.actualDurationSec,
+                                    result.moistureBeforePct, result.completedAtSec);
+}
+
+void bufferPendingPumpStatus(const PumpRunner::Result& result, const char* resultStr) {
+    g_pendingPumpStatusResult = result;
+    strncpy(g_pendingPumpStatusResultStr, resultStr, sizeof(g_pendingPumpStatusResultStr) - 1);
+    g_pendingPumpStatusResultStr[sizeof(g_pendingPumpStatusResultStr) - 1] = '\0';
+    g_pendingPumpStatus = true;
+}
+
+void publishOrBufferPumpStatus(const PumpRunner::Result& result, const char* resultStr) {
+    if (!publishPumpStatusFromResult(result, resultStr)) {
+        bufferPendingPumpStatus(result, resultStr);
+    }
+}
+
+void handleCompletedRun(const PumpRunner::Result& result) {
+    g_wateringController.notifyWateringComplete(result.completedAtSec);
+    g_wateringsToday++;
+    publishOrBufferPumpStatus(result, "completed");
+}
+
+bool publishSkippedStatus(const char* requestId, const char* trigger,
+                          uint32_t requestedDurationSec, float moistureBeforePct) {
+    if (!g_mqtt.isConnected()) {
+        return false;
+    }
+    return g_mqtt.publishPumpStatus(requestId, trigger, "skipped",
+                                    requestedDurationSec, 0,
+                                    moistureBeforePct, currentUnixTimeSec());
+}
+
 void onPumpCommand(char* topic, uint8_t* payload, unsigned int length) {
-    // Minimal stub for the remote-prep phase: no hardware exists to
-    // actually act on a run/stop command yet, and JSON parsing needs a
-    // library (e.g. ArduinoJson) not yet added as a dependency. Full
-    // command handling (device_id match, run/stop, duration_sec) is a
-    // follow-up once real hardware/broker testing begins.
     (void)topic;
-    (void)payload;
-    (void)length;
+
+    StaticJsonDocument<384> doc;
+    DeserializationError err = deserializeJson(doc, payload, length);
+    if (err != DeserializationError::Ok) {
+        return;
+    }
+
+    const char* deviceId = doc["device_id"];
+    if (!deviceId || strcmp(deviceId, DEVICE_ID) != 0) {
+        return;
+    }
+
+    const char* command = doc["command"];
+    if (!command) {
+        return;
+    }
+
+    const char* providedRequestId = doc["request_id"];
+    char localRequestIdBuffer[32];
+    if (!providedRequestId || providedRequestId[0] == '\0') {
+        makeLocalRequestId(localRequestIdBuffer, sizeof(localRequestIdBuffer));
+        providedRequestId = localRequestIdBuffer;
+    }
+    const char* requestId = providedRequestId;
+    const uint32_t nowSec = currentUnixTimeSec();
+
+    // Application-level QoS 1: acknowledge every valid command immediately.
+    // A duplicate request_id is acked again but not re-executed below.
+    if (g_mqtt.isConnected()) {
+        g_mqtt.publishPumpAck(requestId, nowSec);
+    }
+
+    if (g_commandRequestIdHistory.isDuplicate(requestId)) {
+        return;
+    }
+
+    if (strcmp(command, "run") == 0) {
+        const uint32_t minDurationSec = g_configStore.minWateringDurationSec();
+        uint32_t durationSec = doc["duration_sec"] | minDurationSec;
+        if (durationSec < minDurationSec) {
+            durationSec = minDurationSec;
+        }
+
+        const char* trigger = doc["trigger"] | "manual";
+
+        float moistureBeforePct = clampMoisture(readMoisturePercent());
+        if (g_pumpRunner.isRunning()) {
+            publishSkippedStatus(requestId, trigger, durationSec, moistureBeforePct);
+            return;
+        }
+
+        g_pumpRunner.start(millis(), nowSec, durationSec, requestId, trigger, moistureBeforePct);
+    } else if (strcmp(command, "stop") == 0) {
+        PumpRunner::Result result;
+        if (g_pumpRunner.stop(millis(), nowSec, result) == PumpRunResult::STOPPED_EARLY) {
+            handleCompletedRun(result);
+        }
+    }
 }
 }
 
@@ -45,10 +180,25 @@ void setup() {
     Serial.begin(115200);
     enforceSafeDefaultPumpOff();
     setupWatchdog(30);
+
+    initClockTimezone(TIMEZONE_POSIX);
+
+    setupOta(OTA_PASSWORD);
+
+    g_configStore.load();
+    g_wateringController.configure(
+        g_configStore.moistureThresholdPct(),
+        g_configStore.moistureHysteresisPct(),
+        g_configStore.cooldownPeriodSec());
+    g_schedule.configure(ScheduleConfig{
+        g_configStore.scheduleWindowStartHour(),
+        g_configStore.scheduleWindowEndHour(),
+        g_configStore.maxWateringsPerDay()});
 }
 
 void loop() {
     feedWatchdog();
+    handleOta();
 
     uint32_t nowMs = millis();
     g_wifiManager.update(nowMs);
@@ -61,6 +211,19 @@ void loop() {
         g_mqtt.loop();
     }
 
+    // Retry any pump/status message that failed to publish earlier.
+    if (g_pendingPumpStatus && publishPumpStatusFromResult(g_pendingPumpStatusResult, g_pendingPumpStatusResultStr)) {
+        g_pendingPumpStatus = false;
+    }
+
+    // Update the non-blocking pump state machine and publish status when a
+    // run finishes (either by elapsed time or by an external stop command).
+    PumpRunner::Result result;
+    PumpRunResult runResult = g_pumpRunner.update(nowMs, currentUnixTimeSec(), result);
+    if (runResult == PumpRunResult::COMPLETED || runResult == PumpRunResult::STOPPED_EARLY) {
+        handleCompletedRun(result);
+    }
+
     uint32_t nowSec = currentUnixTimeSec();
     int today = static_cast<int>(nowSec / 86400);
     if (today != g_lastCountedDay) {
@@ -70,7 +233,7 @@ void loop() {
 
     if (nowMs - g_lastMoistureReadMs >= MOISTURE_READ_INTERVAL_MS) {
         g_lastMoistureReadMs = nowMs;
-        float moisturePct = readMoisturePercent();
+        float moisturePct = clampMoisture(readMoisturePercent());
 
         if (g_mqtt.isConnected()) {
             g_mqtt.publishMoistureReading(moisturePct, nowSec);
@@ -78,26 +241,11 @@ void loop() {
 
         WaterDecision decision = g_wateringController.evaluate(moisturePct, nowSec);
         if (decision == WaterDecision::WATER_TRIGGERED &&
-            g_schedule.allowsWatering(currentLocalHour(), g_wateringsToday)) {
-            // SIMPLIFICATION: this blocks for the run duration, so an
-            // incoming "stop" command can't interrupt it and MQTT/watchdog
-            // servicing pauses during the run. A non-blocking state
-            // machine (track pump-start time, check elapsed each loop) is
-            // the natural next step once hardware exists and "stop early"
-            // needs to actually work.
-            setPumpRelay(true);
-            delay(MIN_WATERING_DURATION_SEC * 1000UL);
-            setPumpRelay(false);
-
-            uint32_t completedAt = currentUnixTimeSec();
-            g_wateringController.notifyWateringComplete(completedAt);
-            g_wateringsToday++;
-
-            if (g_mqtt.isConnected()) {
-                g_mqtt.publishPumpStatus("local-trigger", "moisture", "completed",
-                                          MIN_WATERING_DURATION_SEC, MIN_WATERING_DURATION_SEC,
-                                          moisturePct, completedAt);
-            }
+            g_schedule.allowsWatering(currentLocalHour(), g_wateringsToday) &&
+            !g_pumpRunner.isRunning()) {
+            char requestId[32];
+            makeLocalRequestId(requestId, sizeof(requestId));
+            g_pumpRunner.start(nowMs, nowSec, g_configStore.minWateringDurationSec(), requestId, "moisture", moisturePct);
         }
     }
 

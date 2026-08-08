@@ -1,2 +1,9 @@
 .claude/settings.local.json
 .claude/worktrees/
+.kimi-code/
+.venv/
+__pycache__/
+*.pyc
+.pio/
+.pytest_cache/
+firmware/include/secrets.h

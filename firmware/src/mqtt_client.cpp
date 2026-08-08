@@ -43,6 +43,14 @@ bool MqttClient::publishPumpStatus(const char* requestId, const char* trigger, c
     return client_.publish(TOPIC_PUMP_STATUS, payload, false);
 }
 
+bool MqttClient::publishPumpAck(const char* requestId, uint32_t timestamp) {
+    char payload[128];
+    snprintf(payload, sizeof(payload),
+             "{\"device_id\":\"%s\",\"request_id\":\"%s\",\"timestamp\":%lu}",
+             DEVICE_ID, requestId, static_cast<unsigned long>(timestamp));
+    return client_.publish(TOPIC_PUMP_ACK, payload, false);
+}
+
 bool MqttClient::publishDeviceStatus(int wifiRssiDbm, float batteryVoltageV, uint32_t uptimeSec, uint32_t timestamp) {
     char payload[192];
     snprintf(payload, sizeof(payload),

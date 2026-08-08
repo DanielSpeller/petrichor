@@ -21,9 +21,9 @@ the two sides should meet in the middle. [`SPEC.md`](SPEC.md) is what makes that
  └────────────────────────┘               └───────────────────────────┘
 ```
 
-Four topics carry everything: `garden/sensor/moisture`, `garden/pump/command`,
-`garden/pump/status`, `garden/device/status`. Three tables store it: `readings`,
-`watering_events`, `device_status`.
+Five topics carry everything: `garden/sensor/moisture`, `garden/pump/command`,
+`garden/pump/status`, `garden/pump/ack`, `garden/device/status`. Three tables store it:
+`readings`, `watering_events`, `device_status`.
 
 Nothing enforces agreement between the C++ and the Python — no shared types, no compiler,
 no test spanning both. **[`SPEC.md`](SPEC.md) is the contract**: topics, JSON payload
@@ -45,7 +45,8 @@ means a dead garden — and never means a flood either:
   unexpected state. Off is always the failure mode.
 
 These values are placeholders in [`firmware/include/config.h`](firmware/include/config.h),
-untuned against real soil.
+untuned against real soil. They are loaded from ESP32 Preferences at boot so they can be
+changed without reflashing, with the compile-time values used as defaults.
 
 ## Layout
 
@@ -64,17 +65,34 @@ Firmware — no board required for either command:
 ```bash
 pip install platformio
 cd firmware
-python -m platformio test -e native     # host unit tests (16 cases)
+cp include/secrets.h.example include/secrets.h   # fill in WiFi and broker credentials
+python -m platformio test -e native     # host unit tests (31 cases)
 python -m platformio run -e esp32dev    # compile-only check for the real target
 ```
 
 Dashboard:
 
 ```bash
-python -m pip install -r dashboard/requirements.txt
+python -m venv .venv
+.venv/Scripts/python.exe -m pip install -r dashboard/requirements.txt  # Windows
+# source .venv/bin/activate && pip install -r dashboard/requirements.txt  # macOS/Linux
 python data/generate_fake_data.py       # builds data/garden.db — 7 days of fake history
 python dashboard/app.py                 # http://127.0.0.1:5000
-cd dashboard && python -m pytest        # 9 cases
+cd dashboard && ../.venv/Scripts/python.exe -m pytest  # Windows, 18 cases
+# cd dashboard && python -m pytest                       # macOS/Linux with venv activated
+```
+
+End-to-end (no hardware):
+
+```bash
+# 1. Start an MQTT broker, e.g. Mosquitto, on localhost:1883.
+# 2. Run the Pi subscriber in one terminal.
+python dashboard/subscriber.py
+# 3. Run the fake ESP32 in another terminal.
+python data/fake_esp32.py
+# 4. Send a pump command and wait for the ack.
+python dashboard/commander.py --command run --duration 15
+# 5. Open http://127.0.0.1:5000 after a few minutes of readings have accumulated.
 ```
 
 ## When hardware arrives
@@ -89,9 +107,19 @@ On the Pi side, the dashboard only ever reads SQLite and has no idea who wrote t
 replacing the fake-data generator with a real MQTT subscriber is a drop-in change — nothing
 in `dashboard/` moves.
 
-Known gaps, both deliberate for this phase:
+Production-hardening status:
 
-- PubSubClient publishes at QoS 0 regardless, while `SPEC.md` asks for QoS 1 on the pump
-  command/status topics. Needs a different library or app-level acks.
-- A watering run blocks the main loop for its duration, so an incoming `stop` command can't
-  interrupt it. Becomes a non-blocking state machine once "stop early" has to actually work.
+- Application-level QoS 1 is implemented via `garden/pump/ack` and command `request_id`
+  deduplication. True MQTT QoS 1 still requires switching from PubSubClient to a library
+  that supports it.
+- WiFi, MQTT broker, TLS, and OTA password credentials live in `firmware/include/secrets.h`,
+  which is generated from `firmware/include/secrets.h.example` and gitignored.
+- MQTT TLS is supported via `WiFiClientSecure`; configure it in `secrets.h`.
+- Runtime configuration (thresholds, schedule, cooldown) is persisted to ESP32 Preferences.
+- Timezone/DST is handled via a POSIX TZ string in `config.h`.
+- OTA updates are handled by ArduinoOTA; set a password in `secrets.h`.
+
+Known gaps:
+
+- `sleep_manager.cpp` is written against the ESP32 Arduino core's documented deep-sleep API
+  but is untested on real silicon and not yet wired into the main loop.

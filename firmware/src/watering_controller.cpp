@@ -3,6 +3,12 @@
 WateringController::WateringController(float thresholdPct, float hysteresisPct, uint32_t cooldownSec)
     : thresholdPct_(thresholdPct), hysteresisPct_(hysteresisPct), cooldownSec_(cooldownSec) {}
 
+void WateringController::configure(float thresholdPct, float hysteresisPct, uint32_t cooldownSec) {
+    thresholdPct_ = thresholdPct;
+    hysteresisPct_ = hysteresisPct;
+    cooldownSec_ = cooldownSec;
+}
+
 WaterDecision WateringController::evaluate(float moisturePct, uint32_t nowUnixSec) {
     if (!armed_) {
         if (moisturePct >= thresholdPct_ + hysteresisPct_) {

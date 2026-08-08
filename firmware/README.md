@@ -17,6 +17,9 @@ Every real-hardware call is isolated behind one named function, each marked
 | `readWifiRssiDbm()` | `src/device_status.cpp` | `WiFi.RSSI()` |
 | `readBatteryVoltageV()` | `src/device_status.cpp` | real ADC read + voltage divider math |
 | `currentUnixTimeSec()` | `src/hal/clock.cpp` | NTP-synced time via `configTime()` |
+| `currentLocalHour()` | `src/hal/clock.cpp` | POSIX TZ string via `setenv`/`tzset` |
+| Runtime config | `src/config_store.cpp` | ESP32 `Preferences` |
+| OTA updates | `src/ota_handler.cpp` | `ArduinoOTA` |
 
 `sleep_manager.cpp`'s `enterDeepSleep()` is structured per the ESP32 Arduino core's
 documented API but **needs real-device testing** — it's not wired into `main.cpp`'s loop yet.
@@ -41,10 +44,12 @@ exists:
 - Debian/Ubuntu/Raspberry Pi OS: `sudo apt install mosquitto`
 - Windows: `winget install EclipseMosquitto.Mosquitto` (or download from mosquitto.org)
 
-Run it locally with `mosquitto -v`, and update the broker address in `src/main.cpp`
-(`g_mqtt` constructor) to match your machine's IP.
+Run it locally with `mosquitto -v`, and update the broker address in
+`firmware/include/secrets.h` (`MQTT_BROKER_HOST`) to match your machine's IP. For TLS, set
+`MQTT_USE_TLS = true` and provide the broker CA certificate (or `setInsecure()` for local
+testing only).
 
 Known limitation: PubSubClient (the MQTT library used here) always publishes at QoS 0 on the
-wire, even though `SPEC.md` specifies QoS 1 for `garden/pump/command` and
-`garden/pump/status`. Revisit this (different library or app-level acks) once real hardware
-testing begins.
+wire. `SPEC.md` specifies QoS 1 for `garden/pump/command` and `garden/pump/status`; the gap
+is closed at the application layer with `garden/pump/ack` and command `request_id`
+deduplication. Switching MQTT libraries is still the path to true wire-level QoS 1.

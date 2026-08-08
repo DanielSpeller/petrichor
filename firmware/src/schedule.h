@@ -11,6 +11,9 @@ class Schedule {
 public:
     explicit Schedule(const ScheduleConfig& config);
 
+    // Update schedule config at runtime (e.g. after loading persisted config).
+    void configure(const ScheduleConfig& config);
+
     // True if `localHour` (0-23) falls inside the allowed watering window.
     bool isWithinWindow(int localHour) const;
 

@@ -16,6 +16,10 @@ class WateringController {
 public:
     WateringController(float thresholdPct, float hysteresisPct, uint32_t cooldownSec);
 
+    // Update thresholds/cooldown at runtime (e.g. after loading persisted config).
+    // Does not reset hysteresis/cooldown state.
+    void configure(float thresholdPct, float hysteresisPct, uint32_t cooldownSec);
+
     // Evaluates the current moisture reading against threshold, hysteresis
     // and cooldown rules. `nowUnixSec` is the current time (unix epoch
     // seconds). Does not mutate cooldown/hysteresis state by itself --

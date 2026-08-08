@@ -31,6 +31,11 @@ public:
                             uint32_t requestedDurationSec, uint32_t actualDurationSec,
                             float moistureBeforePct, uint32_t timestamp);
 
+    // Publishes a garden/pump/ack application-level acknowledgment. Not retained.
+    // Used because PubSubClient cannot send true MQTT QoS 1 publishes; the Pi
+    // correlates this ack with its command request_id to know the command arrived.
+    bool publishPumpAck(const char* requestId, uint32_t timestamp);
+
     // Publishes a garden/device/status heartbeat. Retained, per SPEC.md.
     bool publishDeviceStatus(int wifiRssiDbm, float batteryVoltageV, uint32_t uptimeSec, uint32_t timestamp);
 
