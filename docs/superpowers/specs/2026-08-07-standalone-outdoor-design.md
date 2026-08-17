@@ -1,7 +1,12 @@
-# Standalone Outdoor Design — ESP32-Only, Cloud Status via Cloudflare
+# Historical Standalone Outdoor Design, Superseded
 
 Date: 2026-08-07
-Status: Approved
+Status: Superseded. V1 moved to indoor plant validation on 2026-08-14 and all future
+profiles are now indoor.
+
+This document records a discarded battery-powered outdoor proposal. It does not describe
+the active V1 build or any future deployment. Use the indoor hardware and deployment
+profiles in the root `SPEC.md`. This file is retained only as a historical decision record.
 
 ## Context
 

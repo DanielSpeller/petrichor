@@ -28,7 +28,7 @@ CREATE UNIQUE INDEX idx_watering_events_request_id ON watering_events(request_id
 CREATE TABLE device_status (
     device_id         TEXT PRIMARY KEY,
     wifi_rssi_dbm     INTEGER,
-    battery_voltage_v REAL,
+    supply_voltage_v REAL,
     uptime_sec        INTEGER,
     last_seen         INTEGER NOT NULL
 );

@@ -108,7 +108,7 @@ async function loadDeviceStatus() {
     </span>
     <span class="status-item">Last seen: <strong>${lastSeen}</strong></span>
     <span class="status-item">RSSI: <strong>${status.wifi_rssi_dbm} dBm</strong></span>
-    <span class="status-item">Battery: <strong>${status.battery_voltage_v.toFixed(2)} V</strong></span>
+    <span class="status-item">Supply: <strong>${status.supply_voltage_v == null ? '--' : status.supply_voltage_v.toFixed(2) + ' V'}</strong></span>
   `;
 }
 

@@ -1,6 +1,6 @@
 """Builds data/garden.db: a SQLite fixture matching SPEC.md's schema,
-populated with ~7 days of plausible moisture/watering history for the
-remote-prep phase (no real MQTT data exists yet).
+populated with ~7 days of plausible indoor-soil moisture/watering history.
+The fixture is for development and is not a real indoor-soil or hydroponic observation.
 
 Run directly: `python data/generate_fake_data.py`. Safe to re-run --
 deletes and rebuilds the database from scratch each time.
@@ -90,9 +90,9 @@ def build_database(db_path: Path) -> None:
 
     last_seen = int(end_time.timestamp()) - rng.randint(30, 90)
     conn.execute(
-        "INSERT INTO device_status (device_id, wifi_rssi_dbm, battery_voltage_v, "
+        "INSERT INTO device_status (device_id, wifi_rssi_dbm, supply_voltage_v, "
         "uptime_sec, last_seen) VALUES (?, ?, ?, ?, ?)",
-        (DEVICE_ID, -58, 4.01, 2 * 24 * 3600 + rng.randint(0, 3600), last_seen),
+        (DEVICE_ID, -58, None, 2 * 24 * 3600 + rng.randint(0, 3600), last_seen),
     )
 
     conn.commit()

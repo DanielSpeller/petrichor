@@ -112,12 +112,12 @@ void performCloudSync() {
                                      event.requestedDurationSec, event.actualDurationSec,
                                      event.moistureBeforePct, event.timestampSec);
         }
-        g_mqtt.publishDeviceStatus(readWifiRssiDbm(), readBatteryVoltageV(), readUptimeSec(), currentUnixTimeSec());
+        g_mqtt.publishDeviceStatus(readWifiRssiDbm(), readSupplyVoltageV(), readUptimeSec(), currentUnixTimeSec());
     }
 
     char payload[CLOUD_PAYLOAD_MAX_LEN];
     size_t length = buildIngestPayload(payload, sizeof(payload), DEVICE_ID, g_readings, g_events,
-                                       readWifiRssiDbm(), readBatteryVoltageV(), readUptimeSec(),
+                                       readWifiRssiDbm(), readSupplyVoltageV(), readUptimeSec(),
                                        currentUnixTimeSec());
     if (length && sendIngestPayload(payload)) {
         readingBufferClear(g_readings);

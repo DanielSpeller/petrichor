@@ -1,13 +1,13 @@
 # firmware
 
-ESP32 firmware: moisture sensor + relay-controlled pump, talking MQTT to the Pi.
+ESP32 firmware: moisture sensor + MOSFET-controlled pump, talking MQTT to the Pi.
 
 See `/SPEC.md` before changing any MQTT payload or DB field.
 
 Copy the cloud values from `include/secrets.h.example` into the gitignored
 `include/cloud_secrets.h`. WiFi and MQTT credentials remain in `include/secrets.h`.
 
-## Standalone deep-sleep cycle
+## Indoor V1 cycle
 
 Every real-hardware call is isolated behind one named function, each marked
 `HARDWARE SWAP POINT` in its header comment:
@@ -15,17 +15,25 @@ Every real-hardware call is isolated behind one named function, each marked
 | Function | File | Real implementation (when hardware exists) |
 |---|---|---|
 | `readMoisturePercent()` | `src/hal/moisture_sensor.cpp` | `analogRead()` + conversion to % |
-| `setPumpRelay(bool)` | `src/hal/pump_relay.cpp` | `digitalWrite(PUMP_RELAY_PIN, ...)` |
+| `setPumpRelay(bool)` | `src/hal/pump_relay.cpp` | `digitalWrite(PUMP_DRIVER_PIN, ...)` to the MOSFET driver |
 | `wifiConnect()` / `wifiIsConnected()` | `src/wifi_manager.cpp` | `WiFi.begin()` / `WiFi.status()` |
 | `readWifiRssiDbm()` | `src/device_status.cpp` | `WiFi.RSSI()` |
-| `readBatteryVoltageV()` | `src/device_status.cpp` | real ADC read + voltage divider math |
+| `readSupplyVoltageV()` | `src/device_status.cpp` | optional low-voltage supply ADC read |
 | `currentUnixTimeSec()` | `src/hal/clock.cpp` | NTP-synced time via `configTime()` |
 | `currentLocalHour()` | `src/hal/clock.cpp` | POSIX TZ string via `setenv`/`tzset` |
 | Runtime config | `src/config_store.cpp` | ESP32 `Preferences` |
 | OTA updates | `src/ota_handler.cpp` | `ArduinoOTA` |
 | `sendIngestPayload()` | `src/cloud_client.cpp` | HTTPS POST to the deployed Worker |
 
-`setup()` performs one moisture check, waters if needed, runs a cloud sync when due, and enters deep sleep. RTC memory retains buffered readings, watering events, cooldown state, daily counts, and the sync counter. Cloud and MQTT sync runs every `CHECKS_PER_SYNC` wakes. Deep sleep current, wake timing, RTC drift, and GPIO state retention still need real hardware verification.
+`setup()` performs one moisture check, waters if needed, and synchronises when due. V1 uses a
+certified low-voltage adapter and does not require deep sleep. The local watering decision
+remains safe when MQTT, cloud sync, or the dashboard is unavailable. Deep sleep is optional
+power optimisation for a later indoor profile, not an outdoor or battery requirement.
+
+V1 hardware sits above a plant tray and reservoir. Keep the pump, tubing, and sensor-side
+junction contained so a disconnected tube cannot reach the electronics. See `SPEC.md` §0
+for the indoor liquid-safety requirements and the later indoor hydroponic and multi-plant
+profiles.
 
 ## Build and test
 

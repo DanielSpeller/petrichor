@@ -1,4 +1,8 @@
-# Firmware Standalone Loop Implementation Plan
+# Historical Firmware Standalone Loop Plan, Superseded Outdoor Profile
+
+> Superseded. The active deployment is the indoor plant profile in the root `SPEC.md`, and
+> all future profiles remain indoors. This file is retained as a historical implementation
+> record. Reuse only its local autonomy, buffering, and fault-handling ideas.
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 

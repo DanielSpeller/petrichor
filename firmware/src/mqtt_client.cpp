@@ -51,13 +51,21 @@ bool MqttClient::publishPumpAck(const char* requestId, uint32_t timestamp) {
     return client_.publish(TOPIC_PUMP_ACK, payload, false);
 }
 
-bool MqttClient::publishDeviceStatus(int wifiRssiDbm, float batteryVoltageV, uint32_t uptimeSec, uint32_t timestamp) {
+bool MqttClient::publishDeviceStatus(int wifiRssiDbm, float supplyVoltageV, uint32_t uptimeSec, uint32_t timestamp) {
     char payload[192];
-    snprintf(payload, sizeof(payload),
-             "{\"device_id\":\"%s\",\"wifi_rssi_dbm\":%d,\"battery_voltage_v\":%.2f,"
-             "\"uptime_sec\":%lu,\"timestamp\":%lu}",
-             DEVICE_ID, wifiRssiDbm, batteryVoltageV,
-             static_cast<unsigned long>(uptimeSec), static_cast<unsigned long>(timestamp));
+    if (supplyVoltageV > 0.0f) {
+        snprintf(payload, sizeof(payload),
+                 "{\"device_id\":\"%s\",\"wifi_rssi_dbm\":%d,\"supply_voltage_v\":%.2f,"
+                 "\"uptime_sec\":%lu,\"timestamp\":%lu}",
+                 DEVICE_ID, wifiRssiDbm, supplyVoltageV,
+                 static_cast<unsigned long>(uptimeSec), static_cast<unsigned long>(timestamp));
+    } else {
+        snprintf(payload, sizeof(payload),
+                 "{\"device_id\":\"%s\",\"wifi_rssi_dbm\":%d,\"supply_voltage_v\":null,"
+                 "\"uptime_sec\":%lu,\"timestamp\":%lu}",
+                 DEVICE_ID, wifiRssiDbm,
+                 static_cast<unsigned long>(uptimeSec), static_cast<unsigned long>(timestamp));
+    }
     return client_.publish(TOPIC_DEVICE_STATUS, payload, true); // retained, per SPEC.md
 }
 

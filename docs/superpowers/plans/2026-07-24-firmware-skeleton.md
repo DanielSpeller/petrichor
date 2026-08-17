@@ -1,4 +1,7 @@
-# Firmware Skeleton Implementation Plan
+# Historical Firmware Skeleton Implementation Plan, Superseded Contract
+
+> Historical plan. The active cross-language contract is `SPEC.md`; use the current
+> indoor-only firmware API and optional `supply_voltage_v` field rather than this plan.
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 

@@ -17,9 +17,9 @@ def client(tmp_path, monkeypatch):
         ("zone_1", 42.5, 1000, 1001),
     )
     conn.execute(
-        "INSERT INTO device_status (device_id, wifi_rssi_dbm, battery_voltage_v, uptime_sec, last_seen) "
+        "INSERT INTO device_status (device_id, wifi_rssi_dbm, supply_voltage_v, uptime_sec, last_seen) "
         "VALUES (?, ?, ?, ?, ?)",
-        ("zone_1", -60, 3.98, 86400, 1000),
+        ("zone_1", -60, None, 86400, 1000),
     )
     conn.commit()
     conn.close()

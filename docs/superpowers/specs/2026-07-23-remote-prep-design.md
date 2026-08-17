@@ -1,4 +1,7 @@
-# Remote-Prep Design — Firmware Skeleton + Dashboard
+# Historical Remote-Prep Design — Firmware Skeleton + Dashboard
+
+> Historical design. It predates the indoor-only deployment contract in `SPEC.md` and is
+> retained for implementation history only.
 
 Date: 2026-07-23
 Status: Approved

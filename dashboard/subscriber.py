@@ -44,17 +44,17 @@ def insert_reading(conn, payload):
 
 def upsert_device_status(conn, payload):
     conn.execute(
-        "INSERT INTO device_status (device_id, wifi_rssi_dbm, battery_voltage_v, "
+        "INSERT INTO device_status (device_id, wifi_rssi_dbm, supply_voltage_v, "
         "uptime_sec, last_seen) VALUES (?, ?, ?, ?, ?) "
         "ON CONFLICT(device_id) DO UPDATE SET "
         "wifi_rssi_dbm=excluded.wifi_rssi_dbm, "
-        "battery_voltage_v=excluded.battery_voltage_v, "
+        "supply_voltage_v=excluded.supply_voltage_v, "
         "uptime_sec=excluded.uptime_sec, "
         "last_seen=excluded.last_seen",
         (
             payload.get("device_id"),
             payload.get("wifi_rssi_dbm"),
-            payload.get("battery_voltage_v"),
+            payload.get("supply_voltage_v"),
             payload.get("uptime_sec"),
             payload.get("timestamp"),
         ),

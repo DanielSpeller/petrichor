@@ -18,7 +18,7 @@ bool appendf(char* buffer, size_t bufferSize, size_t& offset, const char* format
 
 size_t buildIngestPayload(char* outBuffer, size_t outBufferSize, const char* deviceId,
                           const ReadingBuffer& readings, const WateringEventBuffer& events,
-                          int wifiRssiDbm, float batteryVoltageV, uint32_t uptimeSec,
+                          int wifiRssiDbm, float supplyVoltageV, uint32_t uptimeSec,
                           uint32_t timestamp) {
     size_t offset = 0;
     if (!appendf(outBuffer, outBufferSize, offset,
@@ -42,8 +42,11 @@ size_t buildIngestPayload(char* outBuffer, size_t outBufferSize, const char* dev
                      static_cast<unsigned long>(event.timestampSec))) return 0;
     }
     if (!appendf(outBuffer, outBufferSize, offset,
-                 "],\"device_status\":{\"wifi_rssi_dbm\":%d,\"battery_voltage_v\":%.2f,"
-                 "\"uptime_sec\":%lu}}", wifiRssiDbm, batteryVoltageV,
-                 static_cast<unsigned long>(uptimeSec))) return 0;
+                 "],\"device_status\":{\"wifi_rssi_dbm\":%d,\"supply_voltage_v\":",
+                 wifiRssiDbm)) return 0;
+    if (!appendf(outBuffer, outBufferSize, offset,
+                 supplyVoltageV > 0.0f ? "%.2f," : "null,", supplyVoltageV)) return 0;
+    if (!appendf(outBuffer, outBufferSize, offset,
+                 "\"uptime_sec\":%lu}}", static_cast<unsigned long>(uptimeSec))) return 0;
     return offset;
 }

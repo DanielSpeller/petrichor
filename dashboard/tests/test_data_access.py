@@ -25,7 +25,7 @@ def db_path(tmp_path):
         ("zone_1", "req-1", "moisture", "completed", 15, 15, 28.0, 60.0, 1000, 1015),
     )
     conn.execute(
-        "INSERT INTO device_status (device_id, wifi_rssi_dbm, battery_voltage_v, uptime_sec, last_seen) "
+        "INSERT INTO device_status (device_id, wifi_rssi_dbm, supply_voltage_v, uptime_sec, last_seen) "
         "VALUES (?, ?, ?, ?, ?)",
         ("zone_1", -60, 3.98, 86400, 2000),
     )

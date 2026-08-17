@@ -36,7 +36,7 @@ def test_upsert_device_status_inserts_and_updates(db_conn):
         {
             "device_id": "zone_1",
             "wifi_rssi_dbm": -70,
-            "battery_voltage_v": 3.95,
+            "supply_voltage_v": None,
             "uptime_sec": 120,
             "timestamp": 1000,
         },
@@ -52,7 +52,7 @@ def test_upsert_device_status_inserts_and_updates(db_conn):
         {
             "device_id": "zone_1",
             "wifi_rssi_dbm": -55,
-            "battery_voltage_v": 3.99,
+            "supply_voltage_v": None,
             "uptime_sec": 240,
             "timestamp": 2000,
         },

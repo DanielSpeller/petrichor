@@ -4,7 +4,7 @@ export interface IngestWateringEvent {
   result: 'completed' | 'failed' | 'skipped'; requested_duration_sec: number;
   actual_duration_sec: number; moisture_before_pct: number; timestamp: number;
 }
-export interface IngestDeviceStatus { wifi_rssi_dbm: number; battery_voltage_v: number; uptime_sec: number }
+export interface IngestDeviceStatus { wifi_rssi_dbm: number; supply_voltage_v: number | null; uptime_sec: number }
 export interface IngestBody {
   device_id: string; timestamp: number; readings: IngestReading[];
   watering_events: IngestWateringEvent[]; device_status: IngestDeviceStatus;
@@ -30,6 +30,8 @@ export function isValidIngestBody(body: unknown): body is IngestBody {
     if (!percent(event.moisture_before_pct) || !integer(event.timestamp)) return false;
   }
   if (!object(body.device_status)) return false;
-  return finite(body.device_status.wifi_rssi_dbm) && finite(body.device_status.battery_voltage_v) &&
-    body.device_status.battery_voltage_v >= 0 && integer(body.device_status.uptime_sec);
+  const supplyVoltage = body.device_status.supply_voltage_v;
+  return finite(body.device_status.wifi_rssi_dbm) &&
+    (supplyVoltage === null || (finite(supplyVoltage) && supplyVoltage >= 0)) &&
+    integer(body.device_status.uptime_sec);
 }

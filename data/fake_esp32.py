@@ -1,4 +1,4 @@
-"""Fake ESP32 for end-to-end remote-prep testing.
+"""Fake ESP32 for end-to-end development testing.
 
 Connects to an MQTT broker and behaves like the real firmware:
 - Publishes moisture readings on garden/sensor/moisture
@@ -151,7 +151,7 @@ class FakeEsp32:
                 {
                     "device_id": DEVICE_ID,
                     "wifi_rssi_dbm": -58,
-                    "battery_voltage_v": 4.01,
+                    "supply_voltage_v": None,
                     "uptime_sec": now_sec,
                     "timestamp": now_sec,
                 }

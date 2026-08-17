@@ -1,10 +1,13 @@
-# Cloudflare Ingest Service Implementation Plan
+# Cloudflare Ingest Service Implementation Plan, Indoor Remote Monitoring
+
+> Optional for V1. The active deployment is the indoor plant profile in the root `SPEC.md`.
+> This plan covers remote monitoring and publication support for indoor modules.
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Stand up a Cloudflare Worker + D1 service that receives batched status pushes from the standalone ESP32 (per `SPEC.md` §5) and serves a public, no-auth status/history page — the ESP32's only remote visibility now that there's no Pi/dashboard running.
+**Goal:** Stand up a Cloudflare Worker + D1 service that receives batched status pushes from an indoor ESP32 (per `SPEC.md` §5) and serves a public, no-auth status/history page as an optional remote view.
 
-**Architecture:** One Worker, two routes. `POST /ingest` (shared-secret authenticated) inserts into a D1 database using the exact table shapes already defined in `SPEC.md` §2 (`readings`, `watering_events`, `device_status`) — same schema the eventual Pi dashboard expects, so nothing about this diverges from that path. `GET /` (public, no auth) queries the same D1 tables and renders a small self-contained HTML status page: latest moisture/battery/RSSI, an inline SVG moisture sparkline, and a recent watering-events table.
+**Architecture:** One Worker, two routes. `POST /ingest` (shared-secret authenticated) inserts into a D1 database using the exact table shapes already defined in `SPEC.md` §2 (`readings`, `watering_events`, `device_status`). `GET /` (public, no auth) queries the same D1 tables and renders a small self-contained HTML status page with latest moisture, optional supply voltage, signal strength, an inline SVG moisture sparkline, and a recent watering-events table.
 
 **Tech Stack:** Cloudflare Workers, D1 (SQLite-compatible), TypeScript, Wrangler CLI, Vitest for pure-logic unit tests.
 
@@ -136,7 +139,7 @@ CREATE UNIQUE INDEX idx_watering_events_request_id ON watering_events(request_id
 CREATE TABLE device_status (
     device_id         TEXT    PRIMARY KEY,
     wifi_rssi_dbm     INTEGER,
-    battery_voltage_v REAL,
+    supply_voltage_v REAL,
     uptime_sec        INTEGER,
     last_seen         INTEGER NOT NULL            -- unix epoch seconds, UTC; timestamp of the last heartbeat received
 );
@@ -226,7 +229,7 @@ const validBody = {
       timestamp: 1753277961,
     },
   ],
-  device_status: { wifi_rssi_dbm: -62, battery_voltage_v: 3.98, uptime_sec: 86412 },
+      device_status: { wifi_rssi_dbm: -62, supply_voltage_v: null, uptime_sec: 86412 },
 };
 
 describe('isValidIngestBody', () => {
@@ -297,7 +300,7 @@ export interface IngestWateringEvent {
 
 export interface IngestDeviceStatus {
   wifi_rssi_dbm: number;
-  battery_voltage_v: number;
+  supply_voltage_v: number | null;
   uptime_sec: number;
 }
 
@@ -335,7 +338,7 @@ export function isValidIngestBody(body: unknown): body is IngestBody {
   if (typeof b.device_status !== 'object' || b.device_status === null) return false;
   const status = b.device_status as Record<string, unknown>;
   if (typeof status.wifi_rssi_dbm !== 'number') return false;
-  if (typeof status.battery_voltage_v !== 'number') return false;
+  if (status.supply_voltage_v !== null && typeof status.supply_voltage_v !== 'number') return false;
   if (typeof status.uptime_sec !== 'number') return false;
 
   return true;
@@ -364,7 +367,7 @@ git commit -m "cloud: add isValidIngestBody request validation"
 
 **Interfaces:**
 - Consumes: nothing from earlier tasks (pure, standalone).
-- Produces: `function escapeHtml(value: string): string`; `function formatTimestamp(unixSec: number): string`; `function buildSparklinePoints(readings: {moisture_pct: number; timestamp: number}[]): string`; `function renderPage(status: {device_id: string; wifi_rssi_dbm: number; battery_voltage_v: number; uptime_sec: number; last_seen: number} | null, readings: {moisture_pct: number; timestamp: number}[], events: {request_id: string; trigger_type: string; status: string; requested_duration_sec: number; actual_duration_sec: number; moisture_before_pct: number; started_at: number}[]): string`.
+- Produces: `function escapeHtml(value: string): string`; `function formatTimestamp(unixSec: number): string`; `function buildSparklinePoints(readings: {moisture_pct: number; timestamp: number}[]): string`; `function renderPage(status: {device_id: string; wifi_rssi_dbm: number; supply_voltage_v: number | null; uptime_sec: number; last_seen: number} | null, readings: {moisture_pct: number; timestamp: number}[], events: {request_id: string; trigger_type: string; status: string; requested_duration_sec: number; actual_duration_sec: number; moisture_before_pct: number; started_at: number}[]): string`.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -421,7 +424,7 @@ describe('renderPage', () => {
 
   it('renders the device_id and latest moisture when status is present', () => {
     const html = renderPage(
-      { device_id: 'zone_1', wifi_rssi_dbm: -62, battery_voltage_v: 3.98, uptime_sec: 86412, last_seen: 0 },
+      { device_id: 'zone_1', wifi_rssi_dbm: -62, supply_voltage_v: null, uptime_sec: 86412, last_seen: 0 },
       [{ moisture_pct: 42.5, timestamp: 0 }],
       []
     );
@@ -431,7 +434,7 @@ describe('renderPage', () => {
 
   it('renders "no watering events yet" when the events list is empty', () => {
     const html = renderPage(
-      { device_id: 'zone_1', wifi_rssi_dbm: -62, battery_voltage_v: 3.98, uptime_sec: 86412, last_seen: 0 },
+      { device_id: 'zone_1', wifi_rssi_dbm: -62, supply_voltage_v: null, uptime_sec: 86412, last_seen: 0 },
       [],
       []
     );
@@ -453,7 +456,7 @@ Create `cloud/src/status_page.ts`:
 interface StatusRow {
   device_id: string;
   wifi_rssi_dbm: number;
-  battery_voltage_v: number;
+  supply_voltage_v: number | null;
   uptime_sec: number;
   last_seen: number;
 }
@@ -540,7 +543,7 @@ export function renderPage(status: StatusRow | null, readings: ReadingRow[], eve
   ${
     status
       ? `<div class="stat"><div class="value">${latestMoisture}%</div><div class="label">moisture</div></div>
-  <div class="stat"><div class="value">${status.battery_voltage_v.toFixed(2)}V</div><div class="label">battery</div></div>
+  <div class="stat"><div class="value">${status.supply_voltage_v === null ? '--' : status.supply_voltage_v.toFixed(2) + 'V'}</div><div class="label">supply</div></div>
   <div class="stat"><div class="value">${status.wifi_rssi_dbm} dBm</div><div class="label">wifi rssi</div></div>
   <div class="stat"><div class="value">${formatTimestamp(status.last_seen)}</div><div class="label">last seen</div></div>
   <svg viewBox="0 0 600 120" preserveAspectRatio="none">
@@ -665,17 +668,17 @@ async function handleIngest(request: Request, env: Env): Promise<Response> {
 
   statements.push(
     env.DB.prepare(
-      `INSERT INTO device_status (device_id, wifi_rssi_dbm, battery_voltage_v, uptime_sec, last_seen)
+      `INSERT INTO device_status (device_id, wifi_rssi_dbm, supply_voltage_v, uptime_sec, last_seen)
        VALUES (?, ?, ?, ?, ?)
        ON CONFLICT(device_id) DO UPDATE SET
          wifi_rssi_dbm = excluded.wifi_rssi_dbm,
-         battery_voltage_v = excluded.battery_voltage_v,
+         supply_voltage_v = excluded.supply_voltage_v,
          uptime_sec = excluded.uptime_sec,
          last_seen = excluded.last_seen`
     ).bind(
       body.device_id,
       body.device_status.wifi_rssi_dbm,
-      body.device_status.battery_voltage_v,
+      body.device_status.supply_voltage_v,
       body.device_status.uptime_sec,
       body.timestamp
     )
@@ -689,7 +692,7 @@ async function handleIngest(request: Request, env: Env): Promise<Response> {
 interface StatusRow {
   device_id: string;
   wifi_rssi_dbm: number;
-  battery_voltage_v: number;
+  supply_voltage_v: number | null;
   uptime_sec: number;
   last_seen: number;
 }
@@ -711,7 +714,7 @@ interface EventRow {
 
 async function handleStatusPage(env: Env): Promise<Response> {
   const status = await env.DB.prepare(
-    'SELECT device_id, wifi_rssi_dbm, battery_voltage_v, uptime_sec, last_seen FROM device_status ORDER BY last_seen DESC LIMIT 1'
+    'SELECT device_id, wifi_rssi_dbm, supply_voltage_v, uptime_sec, last_seen FROM device_status ORDER BY last_seen DESC LIMIT 1'
   ).first<StatusRow>();
 
   if (!status) {
@@ -782,7 +785,7 @@ curl -i -X POST http://localhost:8787/ingest \
       "moisture_before_pct": 28.0,
       "timestamp": 1753277961
     }],
-    "device_status": {"wifi_rssi_dbm": -62, "battery_voltage_v": 3.98, "uptime_sec": 86412}
+    "device_status": {"wifi_rssi_dbm": -62, "supply_voltage_v": null, "uptime_sec": 86412}
   }'
 ```
 
@@ -879,7 +882,7 @@ Create `cloud/README.md`:
 Cloudflare Worker + D1 service that receives batched status pushes from the standalone
 ESP32 (see `/SPEC.md` §5) and serves a public status/history page. This is the ESP32's
 only remote visibility in the standalone deployment — see
-`docs/superpowers/specs/2026-08-07-standalone-outdoor-design.md`.
+`docs/superpowers/specs/2026-08-07-standalone-outdoor-design.md` as a historical superseded design.
 
 ## Layout
 

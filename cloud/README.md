@@ -1,6 +1,9 @@
 # cloud
 
-This Cloudflare Worker accepts authenticated batches from the standalone ESP32 and serves a public status page backed by D1. The request contract is in `../SPEC.md` section 5.
+This Cloudflare Worker accepts authenticated batches from the indoor V1 ESP32 and serves a
+public status page backed by D1. It remains optional during local plant validation. The
+request contract is in `../SPEC.md` section 5. The public status page is a live summary, not
+the authoritative archive for analysis releases.
 
 ## Local development
 

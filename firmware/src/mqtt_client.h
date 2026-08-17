@@ -37,7 +37,7 @@ public:
     bool publishPumpAck(const char* requestId, uint32_t timestamp);
 
     // Publishes a garden/device/status heartbeat. Retained, per SPEC.md.
-    bool publishDeviceStatus(int wifiRssiDbm, float batteryVoltageV, uint32_t uptimeSec, uint32_t timestamp);
+    bool publishDeviceStatus(int wifiRssiDbm, float supplyVoltageV, uint32_t uptimeSec, uint32_t timestamp);
 
     // Subscribes to garden/pump/command with the given callback.
     bool subscribeToPumpCommand(MQTT_CALLBACK_SIGNATURE);

@@ -7,14 +7,128 @@ programs — no shared types, no compiler, no test that spans both languages. If
 a field name, a unit, or a table column, **update this file in the same change**, and treat
 a mismatch between this file and either codebase as a bug.
 
-Current phase: remote-prep. No hardware exists yet. Firmware is developed against a mocked
-MQTT broker; the dashboard is developed against a fake-data generator (see `data/`). This
-spec is what both sides build against so they meet in the middle when hardware arrives.
+Current phase: indoor V1 hardware bring-up. The firmware still has host-testable mocks, but
+the first physical deployment is a single potted plant indoors. The MQTT broker, dashboard,
+and cloud sync remain optional during local validation. Every future Petrichor version is an
+indoor module. Soil, hydroponic, and multi-plant versions are separate indoor profiles.
 
 Scope: this spec assumes a **single device** (one ESP32, one moisture sensor, one pump).
 `device_id` is still present everywhere so the schema and topic shapes don't need to change
 if a second device is added later — but no multi-device routing (per-device topic paths,
 fan-out logic, etc.) exists yet. Don't build for it until it's actually needed.
+
+---
+
+## 0. Concrete V1 hardware design
+
+This section fixes the first indoor build. Substitute parts only after recording the
+electrical change here and checking the firmware pin map.
+
+### Bill of materials
+
+| Part | Required choice | Fixed requirement |
+|---|---|---|
+| Controller | ESP32 DevKitC-class board using an ESP32-WROOM-32 module | PlatformIO target remains `esp32dev`; 3.3 V GPIO; Wi-Fi enabled during sync |
+| Moisture sensor | [DFRobot Gravity SEN0193](https://wiki.dfrobot.com/sen0193/) capacitive analogue sensor | Supply 3.3 V; output 0–3.0 V; connect output to GPIO33; calibrate in the target soil |
+| Pump | [Adafruit Peristaltic Liquid Pump, product 3910](https://www.adafruit.com/product/3910) | 5–6 V DC; nominal 5 V; 500 mA; up to 100 mL/min; use the supplied tubing for bench tests |
+| Pump driver | [Adafruit MOSFET Driver](https://learn.adafruit.com/adafruit-mosfet-driver) | Low-side switching; GPIO27 signal; 3–30 V load rail; integrated AO3406 MOSFET and 1N4007 flyback diode |
+| Power supply | Certified regulated 5 V DC adapter | Use a current-rated adapter with margin above the pump's measured startup demand; keep mains wiring enclosed and outside the project wiring |
+| Backup battery | Optional future indoor feature | Not part of indoor V1; any later battery must remain inside the indoor power and containment design |
+| Charger | Only if a future indoor backup battery is approved | Not part of indoor V1 |
+| 5 V regulator | Adapter rail for V1 | The certified 5 V adapter feeds the pump rail and ESP32 VIN/5V input for V1 |
+| Supply measurement | Optional future GPIO32 circuit | Leave GPIO32 unconnected in V1 unless the low-voltage supply rail is measured |
+| Protection | Low-voltage inline fuse or protected adapter output | Protect the pump branch at a rating chosen from measured startup current |
+| Enclosure | Indoor splash-resistant project box with a gasketed lid | Mount above the plant tray; keep it out of the tray's spill zone; use strain relief and sealed cable entries where liquid could reach the electronics |
+| Containment | Plant saucer or waterproof tray plus reservoir | A failed tube or pump must drain into containment rather than onto furniture or electronics |
+
+The Adafruit pump draws 500 mA according to its published specification. Measure startup
+current with the selected adapter and fuse before unattended operation. If the ESP32 resets
+when the pump starts, stop the build and replace the power arrangement rather than increasing
+the fuse rating.
+
+### Power rails and wiring rules
+
+| Rail | Source | Loads | Limit |
+|---|---|---|---|
+| `5V` | Certified regulated adapter | Pump, MOSFET load side, ESP32 DevKit VIN/5V input | Regulated 5.0 V; verify at pump start |
+| `3V3` | ESP32 DevKit regulator | SEN0193 and MOSFET-driver logic input | Never expose 5 V to an ESP32 GPIO |
+
+Connect the ESP32 ground, sensor ground, MOSFET-driver logic ground, and pump-supply ground
+together. Route pump current from the 5 V adapter and ground directly to the MOSFET driver.
+Do not route pump current through the ESP32 board or breadboard power rails.
+
+### Pin map
+
+| ESP32 GPIO | Function | Electrical rule |
+|---:|---|---|
+| 32 | Reserved supply ADC, ADC1_CH4 | Leave unconnected in indoor V1; use only for a documented low-voltage supply monitor in a later indoor profile |
+| 33 | SEN0193 analogue output, ADC1_CH5 | Input only in firmware; sensor output must stay at or below 3.0 V |
+| 27 | Pump MOSFET driver signal | Output; initialise LOW before any other pump control; LOW means pump off |
+
+GPIO32 and GPIO33 use ADC1 so Wi-Fi sync cannot invalidate their readings. Do not move
+either analogue input to ADC2. Do not use GPIO12 for any part of this circuit because it
+is an ESP32 flash-voltage strapping pin.
+
+### Commissioning calibration
+
+The sensor conversion uses two measured raw ADC endpoints, stored as runtime calibration
+values:
+
+- `sensor_air_raw`: sensor held in air above the target soil
+- `sensor_water_raw`: sensor fully surrounded by water during a short calibration test
+
+Convert linearly from those endpoints to 0–100%, clamp the result, then validate the
+reading against dry, normally watered, and saturated target soil. The initial watering
+values in §4 remain the starting configuration until this test produces a better set.
+
+The pump flow value is also measured rather than assumed. Run the pump for 60 seconds into
+a graduated container, record millilitres delivered, and store the measured rate for
+installation records. The controller still uses timed runs; flow calibration verifies
+that a 10-second run delivers the intended volume.
+
+### Build gates
+
+Complete these gates in order:
+
+1. ESP32 plus SEN0193 on USB power. Verify GPIO33 readings and calibration.
+2. ESP32 plus MOSFET driver and pump on a current-limited 5 V bench supply. Verify GPIO27
+   starts LOW, the pump stops on reset, and the flyback protection is present.
+3. Add the indoor power adapter, pump fuse, plant tray, reservoir, and tubing. Measure 5 V
+   rail voltage, pump start-up current, adapter temperature, and ESP32 brownout behaviour.
+4. Run the assembled indoor rig for 24 hours with a catch tray and verify that every pump
+   run stops at its timeout.
+5. Install the sensor in the final potting mix, calibrate it, and run a supervised watering
+   test before unattended operation.
+
+### Indoor liquid-safety requirements
+
+- Mount the electronics above the plant tray and reservoir. Keep the enclosure outside the
+  tray's spill zone.
+- Make a downward drip loop in every cable that could carry water toward the enclosure. Use
+  correctly sized strain relief or sealed cable glands where liquid exposure is possible.
+- Keep every connector, splice, fuse holder, and exposed terminal inside the enclosure.
+  Do not rely on heat-shrink alone as containment.
+- Use a sensor with a moulded cable, or seal the sensor-side cable junction. The sensor probe
+  may be in damp soil; its electrical junction must remain dry.
+- Keep the reservoir below the electronics. Secure tubing so a disconnected tube cannot
+  spray or siphon onto the enclosure.
+- Test the pump, tubing, tray, and reservoir with plain water before connecting the plant or
+  leaving the system unattended.
+
+### Indoor deployment profiles and future hydroponics
+
+| Profile | Medium | Power | Liquid safety | Status |
+|---|---|---|---|---|
+| V1 indoor plant | Potting mix | Certified 5 V adapter | Tray, reservoir, drip loops, splash-resistant enclosure | Active |
+| V2 indoor hydroponic module | Nutrient solution | Defined low-voltage indoor supply | Reservoir containment, leak detection, secured tubing, corrosion-compatible parts | Future |
+| V3 indoor multi-plant or vertical module | Soil, substrate, or nutrient solution | Defined low-voltage indoor supply | Module-level containment, leak detection, secured tubing, service access | Future |
+
+All profiles remain indoors. Hydroponics is a new sensing profile, not a change of label for
+the soil sensor. A future hydroponic module must define water level, temperature, flow,
+reservoir volume, and plant-support requirements before selecting additional pH, EC,
+dissolved-oxygen, or light sensors. The current `moisture_pct` field describes a soil or
+potting-medium reading and must not represent nutrient-solution chemistry. Add new versioned
+fields and calibration records when that module is designed.
 
 ---
 
@@ -143,7 +257,7 @@ matching the next `garden/sensor/moisture` reading against the `watering_events`
 |---|---|---|---|
 | `device_id` | string | — | |
 | `wifi_rssi_dbm` | integer | dBm, typically -90 to -30 | Signal strength, negative. |
-| `battery_voltage_v` | number (float) | volts | If unpowered/mains-only for now, still publish; use the actual rail voltage. |
+| `supply_voltage_v` | number (float) or null | volts | Optional low-voltage supply telemetry. Null when V1 has no supply monitor. It must not be described as battery voltage unless the active indoor profile includes a battery. |
 | `uptime_sec` | integer | seconds since boot | Resets to 0 on every reboot — dashboard can use a drop as a reboot signal. |
 | `timestamp` | integer | Unix epoch seconds, UTC | When this heartbeat was generated. |
 
@@ -151,7 +265,7 @@ matching the next `garden/sensor/moisture` reading against the `watering_events`
 {
   "device_id": "zone_1",
   "wifi_rssi_dbm": -62,
-  "battery_voltage_v": 3.98,
+  "supply_voltage_v": null,
   "uptime_sec": 86412,
   "timestamp": 1753277970
 }
@@ -195,7 +309,7 @@ CREATE UNIQUE INDEX idx_watering_events_request_id ON watering_events(request_id
 CREATE TABLE device_status (
     device_id         TEXT    PRIMARY KEY,
     wifi_rssi_dbm     INTEGER,
-    battery_voltage_v REAL,
+    supply_voltage_v REAL,
     uptime_sec        INTEGER,
     last_seen         INTEGER NOT NULL            -- unix epoch seconds, UTC; timestamp of the last heartbeat received
 );
@@ -231,15 +345,15 @@ These apply everywhere, no exceptions, so there's no ambiguity to resolve per-fi
 ## 4. Shared Constants
 
 These values are **not** part of any MQTT payload, but both the firmware's watering logic
-and the dashboard's alerting/display logic depend on them. They currently live in firmware
-config (not yet written — this phase has no hardware), but are documented here so the
-dashboard doesn't drift out of sync with what the firmware actually does. If the dashboard
-needs to show "why did/didn't it water," it should show these numbers, not invented ones.
+and the dashboard's alerting/display logic depend on them. They live in
+`firmware/include/config.h` and are documented here so the dashboard doesn't drift out of
+sync with the firmware. If the dashboard needs to show "why did/didn't it water," it should
+show these numbers, not invented ones.
 
-**⚠️ Placeholder values below — not yet tuned against real soil/hardware. Update this table
-the moment real values are chosen, and keep firmware config and this file in lockstep.**
+These are the initial commissioning values. Update this table and firmware config together
+after the soil and pump calibration gates in §0 pass.
 
-| Constant | Placeholder value | Meaning |
+| Constant | Initial value | Meaning |
 |---|---|---|
 | `MOISTURE_THRESHOLD_PCT` | `30` | Below this, the firmware considers soil "dry" and eligible to trigger watering. |
 | `MOISTURE_HYSTERESIS_PCT` | `5` | Soil must reach `MOISTURE_THRESHOLD_PCT + MOISTURE_HYSTERESIS_PCT` (35%) before it's considered "wet enough" again — prevents rapid re-triggering right at the threshold. |
@@ -250,7 +364,7 @@ the moment real values are chosen, and keep firmware config and this file in loc
 
 ## 5. Cloud Ingest Endpoint
 
-The standalone ESP32 batches readings, watering events, and device status to the cloud without changing the MQTT contract.
+The indoor ESP32 may batch readings, watering events, and device status to the cloud without changing the MQTT contract. Cloud sync is optional and never part of the local watering safety decision.
 
 `POST https://<worker-host>/ingest`
 
@@ -262,7 +376,7 @@ Authentication uses `Authorization: Bearer <CLOUD_SHARED_SECRET>`. The body is U
 | `timestamp` | integer | Unix epoch seconds UTC for the batch. |
 | `readings` | array | Objects containing `moisture_pct` and `timestamp`. May be empty. |
 | `watering_events` | array | Objects containing `request_id`, `trigger`, `result`, `requested_duration_sec`, `actual_duration_sec`, `moisture_before_pct`, and `timestamp`. May be empty. |
-| `device_status` | object | Contains `wifi_rssi_dbm`, `battery_voltage_v`, and `uptime_sec`. |
+| `device_status` | object | Contains `wifi_rssi_dbm`, optional `supply_voltage_v`, and `uptime_sec`. |
 
 Each reading becomes a `readings` row. Each event becomes a `watering_events` row with `status` copied from `result`. Device status is upserted by `device_id`. A successful request returns `200` with `{"ok":true}`. Invalid JSON or fields return `400`. Missing or invalid authentication returns `401`.
 
@@ -270,4 +384,5 @@ Each reading becomes a `readings` row. Each event becomes a `watering_events` ro
 
 - `firmware/` — see its own note before changing any MQTT payload.
 - `dashboard/` — see its own note before changing any MQTT payload or DB field.
-- `data/` — fake-data generator and the SQLite file used during remote-prep (no hardware yet).
+- `data/` — fake-data generator and the SQLite file used during development; fake data is not
+  an indoor soil or indoor hydroponic observation.

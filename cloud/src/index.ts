@@ -20,15 +20,15 @@ async function ingest(request: Request, env: Env): Promise<Response> {
      VALUES (?,?,?,?,?,?,?,?,?)`
   ).bind(body.device_id, event.request_id, event.trigger, event.result, event.requested_duration_sec, event.actual_duration_sec, event.moisture_before_pct, event.timestamp, event.timestamp));
   statements.push(env.DB.prepare(
-    `INSERT INTO device_status (device_id,wifi_rssi_dbm,battery_voltage_v,uptime_sec,last_seen) VALUES (?,?,?,?,?)
-     ON CONFLICT(device_id) DO UPDATE SET wifi_rssi_dbm=excluded.wifi_rssi_dbm,battery_voltage_v=excluded.battery_voltage_v,uptime_sec=excluded.uptime_sec,last_seen=excluded.last_seen`
-  ).bind(body.device_id, body.device_status.wifi_rssi_dbm, body.device_status.battery_voltage_v, body.device_status.uptime_sec, body.timestamp));
+    `INSERT INTO device_status (device_id,wifi_rssi_dbm,supply_voltage_v,uptime_sec,last_seen) VALUES (?,?,?,?,?)
+     ON CONFLICT(device_id) DO UPDATE SET wifi_rssi_dbm=excluded.wifi_rssi_dbm,supply_voltage_v=excluded.supply_voltage_v,uptime_sec=excluded.uptime_sec,last_seen=excluded.last_seen`
+  ).bind(body.device_id, body.device_status.wifi_rssi_dbm, body.device_status.supply_voltage_v, body.device_status.uptime_sec, body.timestamp));
   await env.DB.batch(statements);
   return json({ ok: true });
 }
 
 async function statusPage(env: Env): Promise<Response> {
-  const status = await env.DB.prepare('SELECT device_id,wifi_rssi_dbm,battery_voltage_v,uptime_sec,last_seen FROM device_status ORDER BY last_seen DESC LIMIT 1').first<StatusRow>();
+  const status = await env.DB.prepare('SELECT device_id,wifi_rssi_dbm,supply_voltage_v,uptime_sec,last_seen FROM device_status ORDER BY last_seen DESC LIMIT 1').first<StatusRow>();
   let readings: ReadingRow[] = [];
   let events: EventRow[] = [];
   if (status) {

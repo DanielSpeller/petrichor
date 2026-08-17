@@ -53,7 +53,7 @@ def get_device_status(db_path, device_id):
     conn = get_connection(db_path)
     try:
         row = conn.execute(
-            "SELECT device_id, wifi_rssi_dbm, battery_voltage_v, uptime_sec, last_seen "
+            "SELECT device_id, wifi_rssi_dbm, supply_voltage_v, uptime_sec, last_seen "
             "FROM device_status WHERE device_id = ?",
             (device_id,),
         ).fetchone()

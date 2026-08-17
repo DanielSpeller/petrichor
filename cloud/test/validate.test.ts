@@ -5,7 +5,7 @@ const valid = {
   device_id: 'zone_1', timestamp: 1753277970,
   readings: [{ moisture_pct: 42.5, timestamp: 1753277940 }],
   watering_events: [{ request_id: 'local_7', trigger: 'moisture', result: 'completed', requested_duration_sec: 10, actual_duration_sec: 10, moisture_before_pct: 28, timestamp: 1753277961 }],
-  device_status: { wifi_rssi_dbm: -62, battery_voltage_v: 3.98, uptime_sec: 86412 },
+  device_status: { wifi_rssi_dbm: -62, supply_voltage_v: null, uptime_sec: 86412 },
 };
 
 describe('isValidIngestBody', () => {
@@ -17,6 +17,6 @@ describe('isValidIngestBody', () => {
     { ...valid, readings: [{ moisture_pct: 101, timestamp: 1 }] },
     { ...valid, readings: 'bad' },
     { ...valid, watering_events: [{ ...valid.watering_events[0], trigger: 'bad' }] },
-    { ...valid, device_status: { ...valid.device_status, battery_voltage_v: Number.NaN } },
+    { ...valid, device_status: { ...valid.device_status, supply_voltage_v: Number.NaN } },
   ])('rejects malformed input', (body) => expect(isValidIngestBody(body)).toBe(false));
 });
